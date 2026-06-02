@@ -91,53 +91,64 @@ func main() {
 		return
 	}
 
-	if flag.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: osv2gpx [flags] file.OSV")
+	if flag.NArg() < 1 {
+		fmt.Fprintln(os.Stderr, "usage: osv2gpx [flags] file.OSV [file2.OSV ...]")
 		flag.PrintDefaults()
 		os.Exit(2)
 	}
+	if *output != "" && flag.NArg() > 1 {
+		fmt.Fprintln(os.Stderr, "error: -o can only be used with one OSV input")
+		os.Exit(2)
+	}
 
-	path := flag.Arg(0)
+	for _, path := range flag.Args() {
+		if err := convertOSVToGPX(path, *output, uint32(*trackID), *timeOffsetMS); err != nil {
+			fatal(fmt.Errorf("%s: %w", path, err))
+		}
+	}
+}
+
+func convertOSVToGPX(path, outputPath string, trackID uint32, timeOffsetMS int) error {
 	f, err := os.Open(path)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 	defer f.Close()
 
 	tracks, err := parseTracks(f)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 	creationTime, err := parseMovieCreationTime(f)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 
-	t, err := selectTrack(tracks, uint32(*trackID))
+	t, err := selectTrack(tracks, trackID)
 	if err != nil {
-		fatal(err)
+		return err
 	}
-	points, err := extractGPSPoints(f, t, creationTime.Add(time.Duration(*timeOffsetMS)*time.Millisecond))
+	points, err := extractGPSPoints(f, t, creationTime.Add(time.Duration(timeOffsetMS)*time.Millisecond))
 	if err != nil {
-		fatal(err)
+		return err
 	}
 	if len(points) == 0 {
-		fatal(errors.New("no GPS points found in OSV protobuf metadata"))
+		return errors.New("no GPS points found in OSV protobuf metadata")
 	}
 
-	outputPath := *output
 	if outputPath == "" {
 		outputPath = strings.TrimSuffix(path, filepath.Ext(path)) + ".gpx"
 	}
 	outFile, err := os.Create(outputPath)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 	defer outFile.Close()
 	if err := writeGPX(outFile, points, strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))); err != nil {
-		fatal(err)
+		return err
 	}
 	fmt.Fprintf(os.Stderr, "wrote %d GPX points to %s\n", len(points), outputPath)
+	return nil
 }
 
 func parseTracks(r io.ReaderAt) ([]*track, error) {

@@ -35,6 +35,12 @@ Generate `flight.gpx` from `flight.OSV`:
 .\osv2gpx.exe flight.OSV
 ```
 
+Generate one GPX file per OSV input:
+
+```powershell
+.\osv2gpx.exe flight1.OSV flight2.OSV flight3.OSV
+```
+
 Specify the output path:
 
 ```powershell
@@ -62,6 +68,7 @@ Set an MP4 QuickTime `creation_time` from the first timestamp in a GPX:
 ## Options
 
 - `-o`: output GPX path. Defaults to the input filename with `.gpx` extension.
+  Can only be used with one OSV input.
 - `-track`: metadata track ID to read. Defaults to the first `djmd` metadata
   track found in the OSV.
 - `-time-offset-ms`: milliseconds to add to all GPX timestamps.

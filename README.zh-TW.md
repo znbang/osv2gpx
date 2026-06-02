@@ -32,6 +32,12 @@ go build -o osv2gpx.exe .
 .\osv2gpx.exe flight.OSV
 ```
 
+為每個 OSV 輸入各產生一個 GPX 檔：
+
+```powershell
+.\osv2gpx.exe flight1.OSV flight2.OSV flight3.OSV
+```
+
 指定輸出路徑：
 
 ```powershell
@@ -59,6 +65,7 @@ go build -o osv2gpx.exe .
 ## 參數
 
 - `-o`：輸出 GPX 路徑。預設為輸入檔名加上 `.gpx` 副檔名。
+  只能搭配單一 OSV 輸入使用。
 - `-track`：要讀取的 metadata track ID。預設使用 OSV 中第一個 `djmd`
   metadata track。
 - `-time-offset-ms`：將所有 GPX 時間加上指定毫秒偏移。
