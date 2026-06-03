@@ -1,10 +1,10 @@
 # osv2gpx
 
-Extract a complete GPS track from a DJI `.OSV` file and write it as GPX.
+Prepare the GPX track and MP4 timing metadata needed for Google Street View.
 
-`osv2gpx` is intentionally small: it takes an original DJI OSV container, reads
-the GPS telemetry stored in `djmd` protobuf metadata samples, and writes a GPX
-1.1 track file. It preserves every metadata sample that contains GPS data.
+`osv2gpx` extracts a matching GPX track from the original DJI `.OSV` file and
+can write the GPX timestamp back to the exported MP4 so upload tools can align
+the video and GPS track.
 
 [繁體中文](README.zh-TW.md)
 
@@ -16,10 +16,6 @@ the GPS telemetry stored in `djmd` protobuf metadata samples, and writes a GPX
   metadata.
 - Preserves every GPS metadata sample; no point deduplication is performed.
 
-## Requirements
-
-- Go 1.26 or newer
-
 ## Build
 
 ```powershell
@@ -28,28 +24,28 @@ go build -o osv2gpx.exe .
 
 ## Usage
 
-Generate `flight.gpx` from `flight.OSV`:
+First, generate `flight.gpx` from the original `flight.OSV`:
 
 ```powershell
-.\osv2gpx.exe flight.OSV
+osv2gpx flight.OSV
+```
+
+Then, write the GPX first timestamp into the DJI Studio exported MP4:
+
+```powershell
+osv2gpx flight.mp4 flight.gpx
 ```
 
 Generate one GPX file per OSV input:
 
 ```powershell
-.\osv2gpx.exe flight1.OSV flight2.OSV flight3.OSV
+osv2gpx flight1.OSV flight2.OSV flight3.OSV
 ```
 
 Use a specific metadata track if auto-detection is not enough:
 
 ```powershell
-.\osv2gpx.exe -track 3 flight.OSV
-```
-
-Set an MP4 QuickTime `creation_time` from the first timestamp in a GPX:
-
-```powershell
-.\osv2gpx.exe video.mp4 track.gpx
+osv2gpx -track 3 flight.OSV
 ```
 
 ## Options
@@ -76,33 +72,53 @@ payload advertises `dvtm_AVATA360.proto`, but the full `.proto` schema is not
 embedded in the file. The GPS extraction path was inferred from protobuf wire
 data and checked against the matching DJI SRT telemetry.
 
-GPS field path found in `djmd`:
+Because the schema is missing, the code reads the protobuf wire format directly.
+This pseudo `.proto` shows the inferred wire layout. Message and field names are
+descriptive placeholders, not official DJI names:
 
-```text
-telemetry location message: field 4
-lat/lon wrapper:            field 4 -> field 1
-latitude:                   field 4 -> field 1 -> field 2, fixed64 float64
-longitude:                  field 4 -> field 1 -> field 3, fixed64 float64
-absolute altitude:          field 4 -> field 2, varint millimeters
-relative altitude:          field 5 -> field 1, fixed32 float32 millimeters
+```proto
+message Telemetry {
+  Location location = 4;
+  RelativeAltitudeWrapper relative_altitude = 5;
+}
+
+message Location {
+  Coordinates coordinates = 1;
+  uint64 absolute_altitude_mm = 2;
+}
+
+message Coordinates {
+  fixed64 reserved_or_unknown = 1;
+  fixed64 latitude = 2;   // decoded as float64
+  fixed64 longitude = 3;  // decoded as float64
+}
+
+message RelativeAltitudeWrapper {
+  fixed32 relative_altitude_mm = 1;  // decoded as float32
+}
 ```
+
+Only latitude, longitude, and absolute altitude are written to GPX.
 
 ## Timestamp Notes
 
-MP4 `creation_time` is second-precision, while DJI SRT files may include
-millisecond timestamps. For the tested sample:
+MP4 creation time fields use the QuickTime epoch (`1904-01-01T00:00:00Z`)
+and are second-precision, while DJI SRT files may include millisecond
+timestamps. For the tested sample:
 
 ```text
 SRT first time:        2026-05-27T09:23:16.647Z
 OSV first sample time: 2026-05-27T09:23:16.000Z
 ```
 
-## Converted MP4 Limitation
+## Exported MP4 Limitation
 
-Converted MP4 files often contain only video/audio tracks and may not preserve
-DJI `djmd`, `dbgi`, or `camd` metadata tracks. If those metadata tracks are
-missing, GPS cannot be extracted. Use the original OSV whenever possible.
+MP4 files exported from DJI Studio contain only video/audio tracks and do not
+preserve DJI `djmd`, `dbgi`, or `camd` metadata tracks. Because those metadata
+tracks are missing, GPS cannot be extracted from the exported MP4. Use the
+original OSV to generate the GPX track.
 
-If a converted MP4 lost its QuickTime creation metadata but you already have a
-matching GPX, pass the MP4 and GPX together to copy the GPX's first timestamp
-into the MP4 so upload tools can align the video and GPS time ranges.
+DJI Studio exported MP4 files also lack creation time metadata. If you already
+have a matching GPX, pass the MP4 and GPX together to copy the GPX's first
+timestamp into the MP4 creation time fields so upload tools can align the video
+and GPS time ranges.
